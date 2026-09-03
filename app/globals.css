@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #242220;
+  --paper: #f6f4ee;
+  --card-border: #dedacc;
+  --navy: #2d3b4e;
+  --navy-deep: #1d2836;
+  --mustard: #c89b3c;
+  --mustard-deep: #8a6a22;
+  --green: #3c6e52;
+  --green-bg: #e4eee7;
+  --red: #b3452f;
+  --red-bg: #f6e5df;
+  --muted: #6b675e;
+}
+
+html,
+body {
+  background: #ede9dd;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.app-card {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
