@@ -15,6 +15,15 @@ function fmtDateHuman(iso: string) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
 }
+function fmtDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("es-CO", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 type Order = { id: string; number: string; garment_name: string };
 type OrderOp = {
@@ -250,6 +259,9 @@ export function EmployeeApp({
                       <div className="text-sm font-semibold">{r.operation_name}</div>
                       <div className="text-xs text-[var(--muted)] mt-0.5">
                         {r.order_number} · {r.garment_name}
+                      </div>
+                      <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                        {fmtDateTime(r.registered_at)}
                       </div>
                     </div>
                     <div className="text-right">

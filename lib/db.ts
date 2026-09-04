@@ -5,11 +5,18 @@ declare global {
   var __pgPool: Pool | undefined;
 }
 
+// Proveedores como Supabase, Neon o Railway exigen conexión cifrada (SSL).
+// En una base de datos local (localhost) no hace falta, así que solo la
+// activamos cuando la conexión no es local.
+const connectionString = process.env.DATABASE_URL;
+const isLocal = connectionString?.includes("localhost") || connectionString?.includes("127.0.0.1");
+
 export const pool =
   global.__pgPool ??
   new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     max: 10,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
   });
 
 if (process.env.NODE_ENV !== "production") {

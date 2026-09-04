@@ -89,6 +89,37 @@ export async function setOrderStatus(orderId: string, status: string) {
   });
 }
 
+/**
+ * Elimina una orden por completo, SOLO si nunca se registró producción
+ * sobre ella. Si ya tiene registros, se rechaza para no romper la
+ * trazabilidad — en ese caso hay que cerrarla en vez de borrarla.
+ */
+export async function deleteOrder(orderId: string) {
+  const session = await requireAdmin();
+  return withTransaction(async (client) => {
+    const orderRes = await client.query(
+      `SELECT number FROM production_orders WHERE id = $1`,
+      [orderId]
+    );
+    if (orderRes.rowCount === 0) throw new OrderError("Orden no encontrada.");
+
+    const recordsRes = await client.query(
+      `SELECT COUNT(*) AS n FROM production_records WHERE order_id = $1`,
+      [orderId]
+    );
+    if (Number(recordsRes.rows[0].n) > 0) {
+      throw new OrderError(
+        "Esta orden ya tiene producción registrada, no se puede eliminar (se perdería la trazabilidad). Puedes cerrarla en vez de borrarla."
+      );
+    }
+
+    await client.query(`DELETE FROM order_operations WHERE order_id = $1`, [orderId]);
+    await client.query(`DELETE FROM production_orders WHERE id = $1`, [orderId]);
+
+    await insertAudit(client, "admin", session.name, "Orden eliminada", orderRes.rows[0].number);
+  });
+}
+
 export async function getOrdersWithOperations() {
   await requireAdmin();
   const ordersRes = await pool.query(

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createOrder, setOrderStatus } from "@/lib/actions/orders";
+import { createOrder, setOrderStatus, deleteOrder } from "@/lib/actions/orders";
 
 function fmtCOP(n: number) {
   return "$" + Math.round(n || 0).toLocaleString("es-CO");
@@ -97,6 +97,19 @@ export function OrdersClient({ initialOrders, garments }: { initialOrders: Order
         router.refresh();
       } catch (err: any) {
         notify(err.message || "No se pudo cambiar el estado.", "error");
+      }
+    });
+  }
+
+  function removeOrder(orderId: string, number: string) {
+    if (!confirm(`¿Eliminar la orden ${number}? Esta acción no se puede deshacer.`)) return;
+    startTransition(async () => {
+      try {
+        await deleteOrder(orderId);
+        notify(`Orden ${number} eliminada.`);
+        router.refresh();
+      } catch (err: any) {
+        notify(err.message || "No se pudo eliminar la orden.", "error");
       }
     });
   }
@@ -223,17 +236,28 @@ export function OrdersClient({ initialOrders, garments }: { initialOrders: Order
                       </div>
                     );
                   })}
-                  {NEXT_STATUS[o.status] && (
+                  <div className="flex gap-2 mt-3">
+                    {NEXT_STATUS[o.status] && (
+                      <button
+                        className="border border-[var(--navy)] text-[var(--navy)] rounded-lg px-3.5 py-2 text-[13px] font-semibold"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          changeStatus(o.id, NEXT_STATUS[o.status]);
+                        }}
+                      >
+                        {NEXT_LABEL[o.status]}
+                      </button>
+                    )}
                     <button
-                      className="mt-3 border border-[var(--navy)] text-[var(--navy)] rounded-lg px-3.5 py-2 text-[13px] font-semibold"
+                      className="border border-[var(--red)] text-[var(--red)] rounded-lg px-3.5 py-2 text-[13px] font-semibold"
                       onClick={(e) => {
                         e.stopPropagation();
-                        changeStatus(o.id, NEXT_STATUS[o.status]);
+                        removeOrder(o.id, o.number);
                       }}
                     >
-                      {NEXT_LABEL[o.status]}
+                      Eliminar orden
                     </button>
-                  )}
+                  </div>
                 </div>
               )}
             </div>

@@ -23,7 +23,7 @@ export async function getDashboardData() {
   let totalPeriod = 0;
   let unitsPeriod = 0;
   let topEmployees: { name: string; total: number }[] = [];
-  let topOperations: { name: string; qty: number }[] = [];
+  let topOperations: { name: string; processed: number; total: number }[] = [];
   let revenuePeriod = 0;
   let missingPriceGarments: string[] = [];
 
@@ -51,10 +51,33 @@ export async function getDashboardData() {
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
-    topOperations = Array.from(byOperation.entries())
-      .map(([name, qty]) => ({ name, qty }))
-      .sort((a, b) => b.qty - a.qty)
-      .slice(0, 5);
+
+    // Para "Operaciones con mayor producción" mostramos producido/disponible
+    // (sumando todas las órdenes activas con esa operación), no solo lo
+    // producido en este corte — así se ve el avance real, no solo el ranking.
+    const topOperationNames = Array.from(byOperation.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name]) => name);
+
+    if (topOperationNames.length > 0) {
+      const opTotalsRes = await pool.query(
+        `SELECT oo.operation_name, SUM(oo.total_qty) AS total, SUM(oo.processed_qty) AS processed
+         FROM order_operations oo
+         JOIN production_orders po ON po.id = oo.order_id
+         WHERE po.status != 'cerrada' AND oo.operation_name = ANY($1)
+         GROUP BY oo.operation_name`,
+        [topOperationNames]
+      );
+      const totalsMap = new Map(
+        opTotalsRes.rows.map((r) => [r.operation_name, { total: Number(r.total), processed: Number(r.processed) }])
+      );
+      topOperations = topOperationNames.map((name) => ({
+        name,
+        processed: totalsMap.get(name)?.processed ?? 0,
+        total: totalsMap.get(name)?.total ?? 0,
+      }));
+    }
 
     // --- Utilidad del corte: solo cuenta prendas que terminaron TODAS sus operaciones ---
     const ordersRes = await pool.query(

@@ -44,6 +44,13 @@ export default async function DashboardPage() {
             {fmtCOP(d.profitPeriod)}
           </div>
         </div>
+        {d.revenuePeriod === 0 && d.missingPriceGarments.length === 0 && (
+          <div className="text-[11.5px] text-[var(--muted)] mt-2 leading-relaxed">
+            El ingreso sale en $0 hasta que alguna prenda complete TODAS sus operaciones dentro de
+            este corte (no basta con registrar producción parcial). Si ya tienes órdenes casi
+            terminadas, revisa "cuello de botella" en Órdenes para ver qué operación falta.
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3.5">
@@ -63,7 +70,12 @@ export default async function DashboardPage() {
             <div className="text-sm text-[var(--muted)] py-3 text-center">Sin registros todavía en este corte.</div>
           ) : (
             d.topOperations.map((o) => (
-              <BarRow key={o.name} label={o.name} value={`${o.qty} u`} pct={(o.qty / d.topOperations[0].qty) * 100} />
+              <BarRow
+                key={o.name}
+                label={o.name}
+                value={`${o.processed}/${o.total}`}
+                pct={o.total > 0 ? (o.processed / o.total) * 100 : 0}
+              />
             ))
           )}
         </div>

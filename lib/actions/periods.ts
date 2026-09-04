@@ -9,14 +9,16 @@ import { nextAvailablePeriodRange } from "@/lib/dates";
 
 export async function getPeriods() {
   const res = await pool.query(
-    `SELECT id, start_date, end_date, status FROM production_periods ORDER BY start_date DESC`
+    `SELECT id, start_date::text AS start_date, end_date::text AS end_date, status
+     FROM production_periods ORDER BY start_date DESC`
   );
   return res.rows;
 }
 
 export async function getOpenPeriod() {
   const res = await pool.query(
-    `SELECT id, start_date, end_date FROM production_periods WHERE status = 'abierto' LIMIT 1`
+    `SELECT id, start_date::text AS start_date, end_date::text AS end_date
+     FROM production_periods WHERE status = 'abierto' LIMIT 1`
   );
   return res.rows[0] || null;
 }
