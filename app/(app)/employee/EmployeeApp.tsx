@@ -7,6 +7,7 @@ import {
   getOrderOperationsForEmployee,
   registerProduction,
   updateMyProductionQty,
+  deleteMyProductionRecord,
 } from "@/lib/actions/production";
 
 function fmtCOP(n: number) {
@@ -100,34 +101,38 @@ export function EmployeeApp({
   const myTotal = records.reduce((s, r) => s + Number(r.total), 0);
 
   function saveEdit(recordId: string) {
-    const trimmed = editQty.trim();
-    const newQty = trimmed === "" ? NaN : Number(trimmed);
-    if (Number.isNaN(newQty) || newQty < 0) {
-      setToast({ msg: "La cantidad debe ser 0 o más.", kind: "error" });
-      return;
-    }
-    if (
-      newQty === 0 &&
-      !confirm("¿Poner esta cantidad en 0? Es como anular el registro: no contará para pago ni producción, pero queda visible en tu historial.")
-    ) {
+    const newQty = Number(editQty);
+    if (!newQty || newQty <= 0) {
+      setToast({ msg: "La cantidad debe ser mayor a cero.", kind: "error" });
       return;
     }
     startTransition(async () => {
       try {
-        const res = await updateMyProductionQty(recordId, newQty);
+        await updateMyProductionQty(recordId, newQty);
         setRecords((prev) =>
           prev.map((r) =>
             r.id === recordId ? { ...r, qty: newQty, total: newQty * r.rate } : r
           )
         );
-        setToast({
-          msg: newQty === 0 ? `Registro anulado. Disponible: ${res.available} unidades.` : "Registro corregido correctamente.",
-          kind: "ok",
-        });
+        setToast({ msg: "Registro corregido correctamente.", kind: "ok" });
         setEditingId(null);
         router.refresh();
       } catch (err: any) {
         setToast({ msg: err.message || "No se pudo corregir el registro.", kind: "error" });
+      }
+    });
+  }
+
+  function removeRecord(recordId: string, operationName: string) {
+    if (!confirm(`¿Eliminar el registro de "${operationName}"? Esta acción no se puede deshacer.`)) return;
+    startTransition(async () => {
+      try {
+        const res = await deleteMyProductionRecord(recordId);
+        setRecords((prev) => prev.filter((r) => r.id !== recordId));
+        setToast({ msg: `Registro eliminado. Disponible: ${res.available} unidades.`, kind: "ok" });
+        router.refresh();
+      } catch (err: any) {
+        setToast({ msg: err.message || "No se pudo eliminar el registro.", kind: "error" });
       }
     });
   }
@@ -320,7 +325,7 @@ export function EmployeeApp({
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
-                              min="0"
+                              min="1"
                               autoFocus
                               className="h-8 w-24 rounded-md border border-[var(--card-border)] px-2 text-sm"
                               value={editQty}
@@ -340,15 +345,23 @@ export function EmployeeApp({
                             </button>
                           </div>
                         ) : (
-                          <button
-                            className="text-xs text-[var(--navy)] font-semibold underline"
-                            onClick={() => {
-                              setEditingId(r.id);
-                              setEditQty(String(r.qty));
-                            }}
-                          >
-                            Corregir cantidad
-                          </button>
+                          <div className="flex gap-3">
+                            <button
+                              className="text-xs text-[var(--navy)] font-semibold underline"
+                              onClick={() => {
+                                setEditingId(r.id);
+                                setEditQty(String(r.qty));
+                              }}
+                            >
+                              Corregir cantidad
+                            </button>
+                            <button
+                              className="text-xs text-[var(--red)] font-semibold underline"
+                              onClick={() => removeRecord(r.id, r.operation_name)}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}

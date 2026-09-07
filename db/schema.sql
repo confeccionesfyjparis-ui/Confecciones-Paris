@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS production_records (
   rate NUMERIC(12,2) NOT NULL,
   total NUMERIC(14,2) NOT NULL,
   period_id UUID NOT NULL REFERENCES production_periods(id),
-  status TEXT NOT NULL DEFAULT 'activo' CHECK (status IN ('activo','liquidado','corregido')),
+  status TEXT NOT NULL DEFAULT 'activo' CHECK (status IN ('activo','liquidado','corregido','eliminado')),
   registered_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

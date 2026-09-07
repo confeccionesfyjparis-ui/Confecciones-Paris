@@ -135,8 +135,8 @@ export async function registerProduction(params: {
 export async function updateMyProductionQty(recordId: string, newQty: number) {
   const session = await requireEmployee();
   const qty = Math.trunc(Number(newQty));
-  if (Number.isNaN(qty) || qty < 0) {
-    throw new ProductionError("La cantidad debe ser un número entero de 0 o más (pon 0 si te equivocaste y quieres anular este registro).");
+  if (!qty || qty <= 0) {
+    throw new ProductionError("La cantidad debe ser un número entero mayor a cero.");
   }
 
   return withTransaction(async (client) => {
@@ -200,6 +200,67 @@ export async function updateMyProductionQty(recordId: string, newQty: number) {
     );
 
     return { available: op.total_qty - (op.processed_qty + delta) };
+  });
+}
+
+/**
+ * Elimina (soft-delete) un registro de producción propio, dentro de la
+ * misma ventana de 5 días que la corrección de cantidad. Devuelve el
+ * inventario correspondiente y deja constancia en auditoría — el registro
+ * no se borra físicamente, queda marcado como 'eliminado' para no perder
+ * trazabilidad histórica.
+ */
+export async function deleteMyProductionRecord(recordId: string) {
+  const session = await requireEmployee();
+  return withTransaction(async (client) => {
+    const recordRes = await client.query(
+      `SELECT id, employee_id, order_operation_id, qty, operation_name, status,
+              registered_at::date >= (CURRENT_DATE - INTERVAL '4 days') AS is_editable
+       FROM production_records
+       WHERE id = $1
+       FOR UPDATE`,
+      [recordId]
+    );
+    if (recordRes.rowCount === 0) {
+      throw new ProductionError("Registro no encontrado.");
+    }
+    const record = recordRes.rows[0];
+
+    if (record.employee_id !== session.sub) {
+      throw new ProductionError("Solo puedes eliminar tus propios registros.");
+    }
+    if (!record.is_editable) {
+      throw new ProductionError("Solo puedes eliminar un registro dentro de los 5 días siguientes a cuando lo hiciste.");
+    }
+    if (record.status !== "activo") {
+      throw new ProductionError("Este registro ya no se puede eliminar (el período fue cerrado).");
+    }
+
+    const opRes = await client.query(
+      `SELECT id, total_qty, processed_qty FROM order_operations WHERE id = $1 FOR UPDATE`,
+      [record.order_operation_id]
+    );
+    const op = opRes.rows[0];
+
+    await client.query(
+      `UPDATE order_operations SET processed_qty = processed_qty - $1 WHERE id = $2`,
+      [record.qty, op.id]
+    );
+    await client.query(
+      `UPDATE production_records SET status = 'eliminado' WHERE id = $1`,
+      [recordId]
+    );
+
+    const empRes = await client.query(`SELECT name FROM employees WHERE id = $1`, [session.sub]);
+    await insertAudit(
+      client,
+      "employee",
+      empRes.rows[0]?.name,
+      "Registro eliminado (colaborador)",
+      `${record.operation_name}: ${record.qty} unidades`
+    );
+
+    return { available: op.total_qty - (op.processed_qty - record.qty) };
   });
 }
 
