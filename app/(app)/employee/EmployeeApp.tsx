@@ -6,6 +6,7 @@ import { logout } from "@/lib/actions/auth";
 import {
   getOrderOperationsForEmployee,
   registerProduction,
+  updateMyProductionQty,
 } from "@/lib/actions/production";
 
 function fmtCOP(n: number) {
@@ -23,6 +24,15 @@ function fmtDateTime(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+function isToday(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
 }
 
 type Order = { id: string; number: string; garment_name: string };
@@ -68,6 +78,8 @@ export function EmployeeApp({
   const [qty, setQty] = useState("");
   const [toast, setToast] = useState<{ msg: string; kind: "ok" | "error" } | null>(null);
   const [records, setRecords] = useState(initialRecords);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editQty, setEditQty] = useState("");
 
   useEffect(() => {
     if (!toast) return;
@@ -88,6 +100,29 @@ export function EmployeeApp({
 
   const selectedOp = ops.find((o) => o.operation_id === operationId);
   const myTotal = records.reduce((s, r) => s + Number(r.total), 0);
+
+  function saveEdit(recordId: string) {
+    const newQty = Number(editQty);
+    if (!newQty || newQty <= 0) {
+      setToast({ msg: "La cantidad debe ser mayor a cero.", kind: "error" });
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await updateMyProductionQty(recordId, newQty);
+        setRecords((prev) =>
+          prev.map((r) =>
+            r.id === recordId ? { ...r, qty: newQty, total: newQty * r.rate } : r
+          )
+        );
+        setToast({ msg: "Registro corregido correctamente.", kind: "ok" });
+        setEditingId(null);
+        router.refresh();
+      } catch (err: any) {
+        setToast({ msg: err.message || "No se pudo corregir el registro.", kind: "error" });
+      }
+    });
+  }
 
   function handleRegister() {
     if (!orderId || !operationId || !qty) return;
@@ -254,20 +289,61 @@ export function EmployeeApp({
             ) : (
               <div className="flex flex-col gap-2">
                 {records.map((r) => (
-                  <div key={r.id} className="app-card flex justify-between items-center px-3.5 py-3">
-                    <div>
-                      <div className="text-sm font-semibold">{r.operation_name}</div>
-                      <div className="text-xs text-[var(--muted)] mt-0.5">
-                        {r.order_number} · {r.garment_name}
+                  <div key={r.id} className="app-card px-3.5 py-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="text-sm font-semibold">{r.operation_name}</div>
+                        <div className="text-xs text-[var(--muted)] mt-0.5">
+                          {r.order_number} · {r.garment_name}
+                        </div>
+                        <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                          {fmtDateTime(r.registered_at)}
+                        </div>
                       </div>
-                      <div className="text-[11px] text-[var(--muted)] mt-0.5">
-                        {fmtDateTime(r.registered_at)}
+                      <div className="text-right">
+                        <div className="text-xs text-[var(--muted)]">{r.qty} u</div>
+                        <div className="text-sm font-bold text-[var(--green)] mt-0.5">{fmtCOP(Number(r.total))}</div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs text-[var(--muted)]">{r.qty} u</div>
-                      <div className="text-sm font-bold text-[var(--green)] mt-0.5">{fmtCOP(Number(r.total))}</div>
-                    </div>
+
+                    {isToday(r.registered_at) && (
+                      <div className="mt-2 pt-2 border-t border-[var(--card-border)]">
+                        {editingId === r.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="1"
+                              autoFocus
+                              className="h-8 w-24 rounded-md border border-[var(--card-border)] px-2 text-sm"
+                              value={editQty}
+                              onChange={(e) => setEditQty(e.target.value)}
+                            />
+                            <button
+                              className="bg-[var(--navy)] text-white rounded-md px-3 py-1.5 text-xs font-semibold"
+                              onClick={() => saveEdit(r.id)}
+                            >
+                              Guardar
+                            </button>
+                            <button
+                              className="text-[var(--muted)] text-xs px-2"
+                              onClick={() => setEditingId(null)}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="text-xs text-[var(--navy)] font-semibold underline"
+                            onClick={() => {
+                              setEditingId(r.id);
+                              setEditQty(String(r.qty));
+                            }}
+                          >
+                            Corregir cantidad
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

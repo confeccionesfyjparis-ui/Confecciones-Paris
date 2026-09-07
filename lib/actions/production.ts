@@ -126,6 +126,83 @@ export async function registerProduction(params: {
   return registerProductionCore(session.sub, params);
 }
 
+/**
+ * Permite a un colaborador corregir la CANTIDAD de un registro propio,
+ * solo el mismo día en que lo hizo. Usa el mismo bloqueo de fila que el
+ * registro original para que el ajuste de inventario sea igual de seguro
+ * bajo concurrencia. Queda registrado en el historial de auditoría.
+ */
+export async function updateMyProductionQty(recordId: string, newQty: number) {
+  const session = await requireEmployee();
+  const qty = Math.trunc(Number(newQty));
+  if (!qty || qty <= 0) {
+    throw new ProductionError("La cantidad debe ser un número entero mayor a cero.");
+  }
+
+  return withTransaction(async (client) => {
+    const recordRes = await client.query(
+      `SELECT id, employee_id, order_operation_id, qty, rate, status,
+              registered_at::date = CURRENT_DATE AS is_today
+       FROM production_records
+       WHERE id = $1
+       FOR UPDATE`,
+      [recordId]
+    );
+    if (recordRes.rowCount === 0) {
+      throw new ProductionError("Registro no encontrado.");
+    }
+    const record = recordRes.rows[0];
+
+    if (record.employee_id !== session.sub) {
+      throw new ProductionError("Solo puedes editar tus propios registros.");
+    }
+    if (!record.is_today) {
+      throw new ProductionError("Solo puedes editar un registro el mismo día en que lo hiciste.");
+    }
+    if (record.status !== "activo") {
+      throw new ProductionError("Este registro ya no se puede editar (el período fue cerrado).");
+    }
+
+    const opRes = await client.query(
+      `SELECT id, operation_name, total_qty, processed_qty
+       FROM order_operations WHERE id = $1 FOR UPDATE`,
+      [record.order_operation_id]
+    );
+    const op = opRes.rows[0];
+    const oldQty = record.qty;
+    const maxAllowed = op.total_qty - op.processed_qty + oldQty;
+
+    if (qty > maxAllowed) {
+      throw new ProductionError(
+        `Cantidad no disponible. El máximo al que puedes corregir este registro es ${maxAllowed} unidades.`
+      );
+    }
+
+    const delta = qty - oldQty;
+    const newTotal = qty * Number(record.rate);
+
+    await client.query(
+      `UPDATE order_operations SET processed_qty = processed_qty + $1 WHERE id = $2`,
+      [delta, op.id]
+    );
+    await client.query(
+      `UPDATE production_records SET qty = $1, total = $2 WHERE id = $3`,
+      [qty, newTotal, recordId]
+    );
+
+    const empRes = await client.query(`SELECT name FROM employees WHERE id = $1`, [session.sub]);
+    await insertAudit(
+      client,
+      "employee",
+      empRes.rows[0]?.name,
+      "Corrección de producción (colaborador)",
+      `${op.operation_name}: ${oldQty} -> ${qty} unidades`
+    );
+
+    return { available: op.total_qty - (op.processed_qty + delta) };
+  });
+}
+
 export async function getMyOpenOrders() {
   await requireEmployee();
   const res = await pool.query(
