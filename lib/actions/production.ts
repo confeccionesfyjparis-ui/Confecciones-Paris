@@ -135,14 +135,14 @@ export async function registerProduction(params: {
 export async function updateMyProductionQty(recordId: string, newQty: number) {
   const session = await requireEmployee();
   const qty = Math.trunc(Number(newQty));
-  if (!qty || qty <= 0) {
-    throw new ProductionError("La cantidad debe ser un número entero mayor a cero.");
+  if (Number.isNaN(qty) || qty < 0) {
+    throw new ProductionError("La cantidad debe ser un número entero de 0 o más (pon 0 si te equivocaste y quieres anular este registro).");
   }
 
   return withTransaction(async (client) => {
     const recordRes = await client.query(
       `SELECT id, employee_id, order_operation_id, qty, rate, status,
-              registered_at::date = CURRENT_DATE AS is_today
+              registered_at::date >= (CURRENT_DATE - INTERVAL '4 days') AS is_editable
        FROM production_records
        WHERE id = $1
        FOR UPDATE`,
@@ -156,8 +156,8 @@ export async function updateMyProductionQty(recordId: string, newQty: number) {
     if (record.employee_id !== session.sub) {
       throw new ProductionError("Solo puedes editar tus propios registros.");
     }
-    if (!record.is_today) {
-      throw new ProductionError("Solo puedes editar un registro el mismo día en que lo hiciste.");
+    if (!record.is_editable) {
+      throw new ProductionError("Solo puedes editar un registro dentro de los 5 días siguientes a cuando lo hiciste.");
     }
     if (record.status !== "activo") {
       throw new ProductionError("Este registro ya no se puede editar (el período fue cerrado).");
@@ -237,7 +237,7 @@ export async function getMyProductionThisPeriod() {
      JOIN production_orders po ON po.id = pr.order_id
      JOIN garments g ON g.id = po.garment_id
      JOIN production_periods pp ON pp.id = pr.period_id
-     WHERE pr.employee_id = $1 AND pp.status = 'abierto'
+     WHERE pr.employee_id = $1 AND pp.status = 'abierto' AND pr.status = 'activo'
      ORDER BY pr.registered_at DESC`,
     [session.sub]
   );

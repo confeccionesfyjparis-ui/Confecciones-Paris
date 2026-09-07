@@ -67,7 +67,7 @@ export async function closeOpenPeriod() {
       `SELECT pr.employee_id, e.name AS employee_name, pr.operation_name, pr.rate, pr.qty, pr.total
        FROM production_records pr
        JOIN employees e ON e.id = pr.employee_id
-       WHERE pr.period_id = $1`,
+       WHERE pr.period_id = $1 AND pr.status = 'activo'`,
       [period.id]
     );
 
@@ -102,7 +102,7 @@ export async function closeOpenPeriod() {
     }
 
     await client.query(
-      `UPDATE production_records SET status = 'liquidado' WHERE period_id = $1`,
+      `UPDATE production_records SET status = 'liquidado' WHERE period_id = $1 AND status = 'activo'`,
       [period.id]
     );
 

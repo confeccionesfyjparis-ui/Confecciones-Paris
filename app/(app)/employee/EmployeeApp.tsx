@@ -25,14 +25,12 @@ function fmtDateTime(iso: string) {
     minute: "2-digit",
   });
 }
-function isToday(iso: string) {
+function isEditable(iso: string) {
   const d = new Date(iso);
   const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
+  const diffMs = now.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays < 5;
 }
 
 type Order = { id: string; number: string; garment_name: string };
@@ -102,20 +100,30 @@ export function EmployeeApp({
   const myTotal = records.reduce((s, r) => s + Number(r.total), 0);
 
   function saveEdit(recordId: string) {
-    const newQty = Number(editQty);
-    if (!newQty || newQty <= 0) {
-      setToast({ msg: "La cantidad debe ser mayor a cero.", kind: "error" });
+    const trimmed = editQty.trim();
+    const newQty = trimmed === "" ? NaN : Number(trimmed);
+    if (Number.isNaN(newQty) || newQty < 0) {
+      setToast({ msg: "La cantidad debe ser 0 o más.", kind: "error" });
+      return;
+    }
+    if (
+      newQty === 0 &&
+      !confirm("¿Poner esta cantidad en 0? Es como anular el registro: no contará para pago ni producción, pero queda visible en tu historial.")
+    ) {
       return;
     }
     startTransition(async () => {
       try {
-        await updateMyProductionQty(recordId, newQty);
+        const res = await updateMyProductionQty(recordId, newQty);
         setRecords((prev) =>
           prev.map((r) =>
             r.id === recordId ? { ...r, qty: newQty, total: newQty * r.rate } : r
           )
         );
-        setToast({ msg: "Registro corregido correctamente.", kind: "ok" });
+        setToast({
+          msg: newQty === 0 ? `Registro anulado. Disponible: ${res.available} unidades.` : "Registro corregido correctamente.",
+          kind: "ok",
+        });
         setEditingId(null);
         router.refresh();
       } catch (err: any) {
@@ -306,13 +314,13 @@ export function EmployeeApp({
                       </div>
                     </div>
 
-                    {isToday(r.registered_at) && (
+                    {isEditable(r.registered_at) && (
                       <div className="mt-2 pt-2 border-t border-[var(--card-border)]">
                         {editingId === r.id ? (
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
-                              min="1"
+                              min="0"
                               autoFocus
                               className="h-8 w-24 rounded-md border border-[var(--card-border)] px-2 text-sm"
                               value={editQty}

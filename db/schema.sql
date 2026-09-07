@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS production_records (
   order_id UUID NOT NULL REFERENCES production_orders(id),
   order_operation_id UUID NOT NULL REFERENCES order_operations(id),
   operation_name TEXT NOT NULL,
-  qty INT NOT NULL CHECK (qty > 0),
+  qty INT NOT NULL CHECK (qty >= 0),
   rate NUMERIC(12,2) NOT NULL,
   total NUMERIC(14,2) NOT NULL,
   period_id UUID NOT NULL REFERENCES production_periods(id),

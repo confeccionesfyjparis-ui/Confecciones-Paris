@@ -15,7 +15,7 @@ export async function getDashboardData() {
   const period = periodRes.rows[0] || null;
 
   const totalTodayRes = await pool.query(
-    `SELECT COALESCE(SUM(total),0) AS total FROM production_records WHERE registered_at::date = $1`,
+    `SELECT COALESCE(SUM(total),0) AS total FROM production_records WHERE registered_at::date = $1 AND status = 'activo'`,
     [today]
   );
   const totalToday = Number(totalTodayRes.rows[0].total);
@@ -32,7 +32,7 @@ export async function getDashboardData() {
       `SELECT pr.employee_id, e.name AS employee_name, pr.operation_name, pr.qty, pr.total, pr.order_id
        FROM production_records pr
        JOIN employees e ON e.id = pr.employee_id
-       WHERE pr.period_id = $1`,
+       WHERE pr.period_id = $1 AND pr.status = 'activo'`,
       [period.id]
     );
 
@@ -91,7 +91,7 @@ export async function getDashboardData() {
     const beforePeriodRes = await pool.query(
       `SELECT order_operation_id, COALESCE(SUM(qty),0) AS qty
        FROM production_records
-       WHERE registered_at::date < $1::date
+       WHERE registered_at::date < $1::date AND status = 'activo'
        GROUP BY order_operation_id`,
       [period.start_date]
     );
