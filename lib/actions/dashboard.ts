@@ -1,8 +1,24 @@
 "use server";
 
 import { pool } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminOrViewer } from "@/lib/auth";
 import { todayISO } from "@/lib/dates";
+
+export async function getInventoryAlerts() {
+  await requireAdminOrViewer();
+  const alertsRes = await pool.query(
+    `SELECT po.number, oo.operation_name, oo.total_qty, oo.processed_qty
+     FROM order_operations oo
+     JOIN production_orders po ON po.id = oo.order_id
+     WHERE po.status != 'cerrada' AND oo.total_qty > 0
+       AND (oo.processed_qty::float / oo.total_qty) >= 0.9
+       AND oo.processed_qty < oo.total_qty`
+  );
+  return alertsRes.rows.map(
+    (a) =>
+      `${a.number} · ${a.operation_name}: ${Math.round((a.processed_qty / a.total_qty) * 100)}% procesado, casi agotado`
+  );
+}
 
 export async function getDashboardData() {
   await requireAdmin();
@@ -49,8 +65,7 @@ export async function getDashboardData() {
     }
     topEmployees = Array.from(byEmployee.entries())
       .map(([name, total]) => ({ name, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
+      .sort((a, b) => b.total - a.total);
 
     // Para "Operaciones con mayor producción" mostramos producido/disponible
     // (sumando todas las órdenes activas con esa operación), no solo lo
@@ -132,6 +147,24 @@ export async function getDashboardData() {
       `${a.number} · ${a.operation_name}: ${Math.round((a.processed_qty / a.total_qty) * 100)}% procesado, casi agotado`
   );
 
+  // --- Prendas totales en producción y terminadas (todas las órdenes activas, no solo este corte) ---
+  const allActiveOrdersRes = await pool.query(
+    `SELECT po.id, po.initial_qty, po.status
+     FROM production_orders po
+     WHERE po.status != 'cerrada'`
+  );
+  const allOpsRes = await pool.query(
+    `SELECT order_id, processed_qty FROM order_operations`
+  );
+  let totalUnitsFinished = 0;
+  let totalUnitsInProduction = 0;
+  for (const order of allActiveOrdersRes.rows) {
+    const ops = allOpsRes.rows.filter((o) => o.order_id === order.id);
+    const finished = ops.length > 0 ? Math.min(...ops.map((o) => o.processed_qty)) : 0;
+    totalUnitsFinished += finished;
+    totalUnitsInProduction += order.initial_qty - finished;
+  }
+
   return {
     period,
     totalToday,
@@ -144,5 +177,7 @@ export async function getDashboardData() {
     revenuePeriod,
     profitPeriod: revenuePeriod - totalPeriod,
     missingPriceGarments,
+    totalUnitsFinished,
+    totalUnitsInProduction,
   };
 }

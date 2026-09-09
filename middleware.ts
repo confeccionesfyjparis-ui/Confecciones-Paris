@@ -22,8 +22,9 @@ export async function middleware(req: NextRequest) {
 
   const isAdminRoute = pathname.startsWith("/admin");
   const isEmployeeRoute = pathname.startsWith("/employee");
+  const isViewerRoute = pathname.startsWith("/consulta");
 
-  if ((isAdminRoute || isEmployeeRoute) && !role) {
+  if ((isAdminRoute || isEmployeeRoute || isViewerRoute) && !role) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
   if (isAdminRoute && role !== "admin") {
@@ -32,9 +33,12 @@ export async function middleware(req: NextRequest) {
   if (isEmployeeRoute && role !== "employee") {
     return NextResponse.redirect(new URL("/login", req.url));
   }
+  if (isViewerRoute && role !== "viewer") {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/employee/:path*"],
+  matcher: ["/admin/:path*", "/employee/:path*", "/consulta/:path*"],
 };

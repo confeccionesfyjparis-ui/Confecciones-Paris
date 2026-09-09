@@ -99,6 +99,44 @@ export async function addOperationToGarment(garmentId: string, name: string, rat
   });
 }
 
+/**
+ * Elimina una operación del catálogo de una prenda, SOLO si nunca se usó
+ * en ninguna orden (es decir, ninguna orden se creó todavía con esa
+ * operación incluida). Si ya se usó, se rechaza para no romper la
+ * trazabilidad de órdenes existentes.
+ */
+export async function deleteOperationFromGarment(operationId: string) {
+  const session = await requireAdmin();
+  return withTransaction(async (client) => {
+    const opRes = await client.query(
+      `SELECT o.name, g.name AS garment_name FROM operations o
+       JOIN garments g ON g.id = o.garment_id
+       WHERE o.id = $1`,
+      [operationId]
+    );
+    if (opRes.rowCount === 0) throw new GarmentError("Operación no encontrada.");
+
+    const usedRes = await client.query(
+      `SELECT COUNT(*) AS n FROM order_operations WHERE operation_id = $1`,
+      [operationId]
+    );
+    if (Number(usedRes.rows[0].n) > 0) {
+      throw new GarmentError(
+        "Esta operación ya se usó en al menos una orden, no se puede eliminar (se perdería la trazabilidad de esa orden)."
+      );
+    }
+
+    await client.query(`DELETE FROM operations WHERE id = $1`, [operationId]);
+    await insertAudit(
+      client,
+      "admin",
+      session.name,
+      "Operación eliminada",
+      `${opRes.rows[0].garment_name}: ${opRes.rows[0].name}`
+    );
+  });
+}
+
 export async function updateOperationRate(operationId: string, newRate: number) {
   const session = await requireAdmin();
   const rate = Number(newRate);

@@ -20,6 +20,8 @@ export default async function DashboardPage() {
         <StatCard label="Producción del corte" value={fmtCOP(d.totalPeriod)} />
         <StatCard label="Unidades del corte" value={d.unitsPeriod.toLocaleString("es-CO")} />
         <StatCard label="Colaboradores activos" value={String(d.activeEmployees)} />
+        <StatCard label="Prendas en producción (unidades)" value={d.totalUnitsInProduction.toLocaleString("es-CO")} />
+        <StatCard label="Prendas terminadas (unidades)" value={d.totalUnitsFinished.toLocaleString("es-CO")} />
       </div>
 
       <div className="app-card p-4 mb-4">
@@ -55,13 +57,15 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3.5">
         <div className="app-card p-4">
-          <div className="text-[13.5px] font-semibold text-[var(--navy)] mb-2">Top de productividad (corte actual)</div>
+          <div className="text-[13.5px] font-semibold text-[var(--navy)] mb-2">Producción por colaborador (corte actual)</div>
           {d.topEmployees.length === 0 ? (
             <div className="text-sm text-[var(--muted)] py-3 text-center">Sin registros todavía en este corte.</div>
           ) : (
-            d.topEmployees.map((e) => (
-              <BarRow key={e.name} label={e.name} value={fmtCOP(e.total)} pct={(e.total / d.topEmployees[0].total) * 100} />
-            ))
+            <div className="max-h-64 overflow-y-auto pr-1">
+              {d.topEmployees.map((e) => (
+                <BarRow key={e.name} label={e.name} value={fmtCOP(e.total)} pct={(e.total / d.topEmployees[0].total) * 100} />
+              ))}
+            </div>
           )}
         </div>
         <div className="app-card p-4">

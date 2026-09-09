@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS production_orders (
   due_date DATE,
   status TEXT NOT NULL DEFAULT 'pendiente'
     CHECK (status IN ('pendiente','en_produccion','terminada','cerrada')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ
 );
 
 -- ---------- Saldo disponible por orden + operación (el corazón del inventario) ----------
@@ -139,7 +140,7 @@ CREATE TABLE IF NOT EXISTS settlements (
 -- ---------- Auditoría ----------
 CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  actor_type TEXT NOT NULL,   -- 'admin' | 'employee' | 'system'
+  actor_type TEXT NOT NULL,   -- 'admin' | 'employee' | 'viewer' | 'system'
   actor_name TEXT,
   action TEXT NOT NULL,
   detail TEXT,

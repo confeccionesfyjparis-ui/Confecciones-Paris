@@ -23,6 +23,23 @@ export async function loginAdmin(username: string, password: string) {
   await insertAudit(pool, "admin", user.username, "Inicio de sesión");
 }
 
+export async function loginViewer(username: string, password: string) {
+  const res = await pool.query(
+    `SELECT id, username, password_hash, active FROM users WHERE username = $1 AND role = 'viewer'`,
+    [username]
+  );
+  if (res.rowCount === 0 || !res.rows[0].active) {
+    throw new AuthError("Usuario o contraseña incorrectos.");
+  }
+  const user = res.rows[0];
+  const ok = await verifySecret(password, user.password_hash);
+  if (!ok) {
+    throw new AuthError("Usuario o contraseña incorrectos.");
+  }
+  await createSession({ sub: user.id, role: "viewer", name: user.username });
+  await insertAudit(pool, "viewer", user.username, "Inicio de sesión");
+}
+
 export async function loginEmployee(employeeId: string, pin: string) {
   const res = await pool.query(
     `SELECT id, name, pin_hash, active FROM employees WHERE id = $1`,

@@ -13,6 +13,7 @@ const TABS = [
   { href: "/admin/periodos", label: "Períodos" },
   { href: "/admin/liquidaciones", label: "Liquidaciones" },
   { href: "/admin/auditoria", label: "Auditoría" },
+  { href: "/admin/usuarios-consulta", label: "Usuarios de consulta" },
 ];
 
 export function AdminShell({ adminName, children }: { adminName: string; children: React.ReactNode }) {

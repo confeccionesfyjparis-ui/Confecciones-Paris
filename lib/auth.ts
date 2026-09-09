@@ -9,7 +9,7 @@ const SECRET = new TextEncoder().encode(
 
 export type SessionPayload = {
   sub: string; // id del usuario o colaborador
-  role: "admin" | "employee";
+  role: "admin" | "employee" | "viewer";
   name: string;
 };
 
@@ -54,7 +54,7 @@ export async function getSession(): Promise<SessionPayload | null> {
     const { payload } = await jwtVerify(token, SECRET);
     return {
       sub: payload.sub as string,
-      role: payload.role as "admin" | "employee",
+      role: payload.role as "admin" | "employee" | "viewer",
       name: payload.name as string,
     };
   } catch {
@@ -74,6 +74,22 @@ export async function requireEmployee(): Promise<SessionPayload> {
   const session = await getSession();
   if (!session || session.role !== "employee") {
     throw new Error("No autorizado: se requiere sesión de colaborador.");
+  }
+  return session;
+}
+
+export async function requireViewer(): Promise<SessionPayload> {
+  const session = await getSession();
+  if (!session || session.role !== "viewer") {
+    throw new Error("No autorizado: se requiere sesión de usuario de consulta.");
+  }
+  return session;
+}
+
+export async function requireAdminOrViewer(): Promise<SessionPayload> {
+  const session = await getSession();
+  if (!session || (session.role !== "admin" && session.role !== "viewer")) {
+    throw new Error("No autorizado.");
   }
   return session;
 }

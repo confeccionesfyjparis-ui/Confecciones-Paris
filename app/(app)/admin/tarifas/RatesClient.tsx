@@ -7,6 +7,7 @@ import {
   addOperationToGarment,
   updateOperationRate,
   updateGarmentSalePrice,
+  deleteOperationFromGarment,
 } from "@/lib/actions/garments";
 
 function fmtCOP(n: number) {
@@ -82,6 +83,19 @@ export function RatesClient({ initialGarments }: { initialGarments: Garment[] })
         router.refresh();
       } catch (err: any) {
         notify(err.message || "No se pudo actualizar la tarifa.", "error");
+      }
+    });
+  }
+
+  function removeOperation(operationId: string, name: string) {
+    if (!confirm(`¿Eliminar la operación "${name}"? Esta acción no se puede deshacer.`)) return;
+    startTransition(async () => {
+      try {
+        await deleteOperationFromGarment(operationId);
+        notify(`Operación "${name}" eliminada.`);
+        router.refresh();
+      } catch (err: any) {
+        notify(err.message || "No se pudo eliminar la operación.", "error");
       }
     });
   }
@@ -184,6 +198,7 @@ export function RatesClient({ initialGarments }: { initialGarments: Garment[] })
                     <div className="flex items-center gap-2.5">
                       <span className="text-[13.5px] font-semibold">{fmtCOP(op.rate)}</span>
                       <button className="ghost-btn" onClick={() => setEditingRate({ opId: op.id, value: String(op.rate) })}>Editar</button>
+                      <button className="ghost-btn" style={{ color: "var(--red)", borderColor: "#E3BBAB" }} onClick={() => removeOperation(op.id, op.name)}>Eliminar</button>
                     </div>
                   )}
                 </div>

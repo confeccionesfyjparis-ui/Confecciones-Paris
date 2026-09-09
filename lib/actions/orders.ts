@@ -2,7 +2,7 @@
 
 import { OrderError } from "@/lib/errors";
 import { pool, withTransaction } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminOrViewer } from "@/lib/auth";
 import { insertAudit } from "@/lib/audit";
 
 
@@ -81,7 +81,9 @@ export async function setOrderStatus(orderId: string, status: string) {
 
   return withTransaction(async (client) => {
     const res = await client.query(
-      `UPDATE production_orders SET status = $1 WHERE id = $2 RETURNING number`,
+      status === "cerrada"
+        ? `UPDATE production_orders SET status = $1, closed_at = now() WHERE id = $2 RETURNING number`
+        : `UPDATE production_orders SET status = $1 WHERE id = $2 RETURNING number`,
       [status, orderId]
     );
     if (res.rowCount === 0) throw new OrderError("Orden no encontrada.");
@@ -121,10 +123,11 @@ export async function deleteOrder(orderId: string) {
 }
 
 export async function getOrdersWithOperations() {
-  await requireAdmin();
+  await requireAdminOrViewer();
   const ordersRes = await pool.query(
     `SELECT po.id, po.number, po.client, po.color, po.size, po.initial_qty, po.status,
-            po.start_date, po.due_date, g.name AS garment_name, g.id AS garment_id
+            po.start_date, po.due_date, po.created_at, po.closed_at,
+            g.name AS garment_name, g.id AS garment_id
      FROM production_orders po
      JOIN garments g ON g.id = po.garment_id
      ORDER BY po.created_at DESC`

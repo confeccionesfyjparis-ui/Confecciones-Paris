@@ -7,6 +7,10 @@ import { createOrder, setOrderStatus, deleteOrder } from "@/lib/actions/orders";
 function fmtCOP(n: number) {
   return "$" + Math.round(n || 0).toLocaleString("es-CO");
 }
+function fmtDateHuman(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 type Garment = { id: string; name: string };
 type OrderOp = { id: string; operation_name: string; rate: number; total_qty: number; processed_qty: number };
@@ -19,6 +23,8 @@ type Order = {
   initial_qty: number;
   status: string;
   garment_name: string;
+  created_at: string;
+  closed_at: string | null;
   operations: OrderOp[];
 };
 
@@ -205,6 +211,10 @@ export function OrdersClient({ initialOrders, garments }: { initialOrders: Order
                   </div>
                   <div className="text-xs font-semibold text-[var(--green)] mt-1">
                     Prendas terminadas (todas sus operaciones): {finishedUnits} de {o.initial_qty}
+                  </div>
+                  <div className="text-[11px] text-[var(--muted)] mt-1">
+                    Creada: {fmtDateHuman(o.created_at)}
+                    {o.closed_at ? ` · Cerrada: ${fmtDateHuman(o.closed_at)}` : ""}
                   </div>
                 </div>
                 <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-full shrink-0 ml-2 ${STATUS_STYLE[o.status]}`}>
