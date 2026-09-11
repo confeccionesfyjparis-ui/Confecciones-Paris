@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { loginAdmin, loginEmployee, loginViewer } from "@/lib/actions/auth";
 
-export function LoginForm({ employees }: { employees: { id: string; name: string }[] }) {
+export function LoginForm({
+  employees,
+  viewers,
+}: {
+  employees: { id: string; name: string }[];
+  viewers: { id: string; username: string }[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -17,7 +23,6 @@ export function LoginForm({ employees }: { employees: { id: string; name: string
   const [password, setPassword] = useState("");
   const [adminError, setAdminError] = useState("");
 
-  const [showViewer, setShowViewer] = useState(false);
   const [viewerUsername, setViewerUsername] = useState("");
   const [viewerPassword, setViewerPassword] = useState("");
   const [viewerError, setViewerError] = useState("");
@@ -157,40 +162,40 @@ export function LoginForm({ employees }: { employees: { id: string; name: string
 
         <div className="app-card p-4 mb-3.5">
           <div className="text-[13px] font-semibold text-[var(--navy)] mb-2.5">Soy usuario de consulta</div>
-          {showViewer ? (
-            <div>
-              <input
-                className="w-full h-10 rounded-lg border border-[var(--card-border)] px-2.5 text-sm mb-2.5"
-                placeholder="Usuario"
-                value={viewerUsername}
-                onChange={(e) => setViewerUsername(e.target.value)}
-                autoFocus
-              />
-              <input
-                type="password"
-                className="w-full h-10 rounded-lg border border-[var(--card-border)] px-2.5 text-sm"
-                placeholder="Contraseña"
-                value={viewerPassword}
-                onChange={(e) => setViewerPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submitViewer()}
-              />
-              {viewerError && <div className="text-xs text-[var(--red)] mt-1.5">{viewerError}</div>}
-              <button
-                className="w-full mt-3 bg-[var(--navy)] text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
-                disabled={!viewerUsername || !viewerPassword || isPending}
-                onClick={submitViewer}
-              >
-                Entrar
-              </button>
-            </div>
-          ) : (
-            <button
-              className="w-full border border-[var(--navy)] text-[var(--navy)] rounded-lg py-2.5 text-sm font-semibold"
-              onClick={() => setShowViewer(true)}
-            >
-              Entrar a consultar órdenes e inventario
-            </button>
+          <select
+            className="w-full h-10 rounded-lg border border-[var(--card-border)] px-2.5 text-sm"
+            value={viewerUsername}
+            onChange={(e) => {
+              setViewerUsername(e.target.value);
+              setViewerPassword("");
+              setViewerError("");
+            }}
+          >
+            <option value="">Selecciona tu nombre</option>
+            {viewers.map((v) => (
+              <option key={v.id} value={v.username}>
+                {v.username}
+              </option>
+            ))}
+          </select>
+          {viewerUsername && (
+            <input
+              type="password"
+              className="w-full h-10 rounded-lg border border-[var(--card-border)] px-2.5 text-sm mt-2.5"
+              placeholder="Contraseña"
+              value={viewerPassword}
+              onChange={(e) => setViewerPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitViewer()}
+            />
           )}
+          {viewerError && <div className="text-xs text-[var(--red)] mt-1.5">{viewerError}</div>}
+          <button
+            className="w-full mt-3 bg-[var(--navy)] text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
+            disabled={!viewerUsername || !viewerPassword || isPending}
+            onClick={submitViewer}
+          >
+            Entrar a consultar órdenes e inventario
+          </button>
         </div>
 
         <div className="text-xs text-[var(--muted)] leading-relaxed">

@@ -72,3 +72,15 @@ export async function resetViewerPassword(userId: string, newPassword: string) {
     await insertAudit(client, "admin", session.name, "Contraseña de usuario de consulta actualizada", res.rows[0].username);
   });
 }
+
+export async function deleteViewerUser(userId: string) {
+  const session = await requireAdmin();
+  return withTransaction(async (client) => {
+    const res = await client.query(
+      `DELETE FROM users WHERE id = $1 AND role = 'viewer' RETURNING username`,
+      [userId]
+    );
+    if (res.rowCount === 0) throw new AppError("Usuario no encontrado.");
+    await insertAudit(client, "admin", session.name, "Usuario de consulta eliminado", res.rows[0].username);
+  });
+}

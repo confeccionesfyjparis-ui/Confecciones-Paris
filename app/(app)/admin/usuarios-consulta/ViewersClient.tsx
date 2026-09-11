@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createViewerUser, toggleViewerActive, resetViewerPassword } from "@/lib/actions/users";
+import { createViewerUser, toggleViewerActive, resetViewerPassword, deleteViewerUser } from "@/lib/actions/users";
 
 type ViewerUser = { id: string; username: string; active: boolean };
 
@@ -42,6 +42,19 @@ export function ViewersClient({ initialUsers }: { initialUsers: ViewerUser[] }) 
     startTransition(async () => {
       await toggleViewerActive(id);
       router.refresh();
+    });
+  }
+
+  function removeUser(id: string, username: string) {
+    if (!confirm(`¿Eliminar el usuario "${username}"? Esta acción no se puede deshacer.`)) return;
+    startTransition(async () => {
+      try {
+        await deleteViewerUser(id);
+        notify(`Usuario "${username}" eliminado.`);
+        router.refresh();
+      } catch (err: any) {
+        notify(err.message || "No se pudo eliminar el usuario.", "error");
+      }
     });
   }
 
@@ -101,6 +114,9 @@ export function ViewersClient({ initialUsers }: { initialUsers: ViewerUser[] }) 
                 </button>
                 <button className="ghost-btn" onClick={() => toggleActive(u.id)} disabled={isPending}>
                   {u.active ? "Desactivar" : "Activar"}
+                </button>
+                <button className="ghost-btn" style={{ color: "var(--red)", borderColor: "#E3BBAB" }} onClick={() => removeUser(u.id, u.username)} disabled={isPending}>
+                  Eliminar
                 </button>
               </div>
             </div>

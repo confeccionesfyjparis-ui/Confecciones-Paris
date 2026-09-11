@@ -67,3 +67,10 @@ export async function listActiveEmployeesForLogin() {
   );
   return res.rows;
 }
+
+export async function listActiveViewersForLogin() {
+  const res = await pool.query(
+    `SELECT id, username FROM users WHERE active = true AND role = 'viewer' ORDER BY username`
+  );
+  return res.rows;
+}
