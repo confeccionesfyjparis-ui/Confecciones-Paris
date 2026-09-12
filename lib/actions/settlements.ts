@@ -9,7 +9,8 @@ import { insertAudit } from "@/lib/audit";
 export async function getSettlements() {
   await requireAdmin();
   const res = await pool.query(
-    `SELECT s.id, s.period_id, s.employee_id, s.total, s.lines, s.sealed, s.sealed_at, s.generated_at,
+    `SELECT s.id, s.period_id, s.employee_id, s.total, s.lines, s.deductions, s.net_total,
+            s.sealed, s.sealed_at, s.generated_at,
             e.name AS employee_name,
             pp.start_date::text AS period_start, pp.end_date::text AS period_end
      FROM settlements s

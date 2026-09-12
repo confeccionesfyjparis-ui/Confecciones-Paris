@@ -12,11 +12,14 @@ function fmtDateHuman(iso: string) {
 }
 
 type Line = { operationName: string; qty: number; rate: number; total: number };
+type DeductionLine = { concept: string; amount: number; note: string | null };
 type Settlement = {
   id: string;
   employee_name: string;
   total: number;
   lines: Line[];
+  deductions: DeductionLine[];
+  net_total: number;
   sealed: boolean;
   period_start: string;
   period_end: string;
@@ -42,7 +45,17 @@ export function SettlementsClient({ initialSettlements }: { initialSettlements: 
 
   return (
     <div>
-      <div className="text-[15px] font-semibold text-[var(--navy)] mb-2">Liquidaciones generadas</div>
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-[15px] font-semibold text-[var(--navy)]">Liquidaciones generadas</div>
+        {initialSettlements.length > 0 && (
+          <button
+            className="bg-[var(--navy)] text-white rounded-lg px-3.5 py-2 text-[13px] font-semibold"
+            onClick={() => window.open("/api/settlements/export", "_blank")}
+          >
+            Descargar Excel
+          </button>
+        )}
+      </div>
       <div className="bg-[#EEF1E9] border border-[#D3DAC4] text-[#4B5540] rounded-lg px-3.5 py-2.5 text-sm mb-4 leading-relaxed">
         Genera el recibo en PDF (media carta) desde cada liquidación. Al generarlo por primera vez
         queda sellada: no se modifica aunque el colaborador siga registrando producción en
@@ -66,7 +79,7 @@ export function SettlementsClient({ initialSettlements }: { initialSettlements: 
                         <div className="text-sm font-semibold">{s.employee_name}</div>
                         {s.sealed && <div className="text-[11px] text-[var(--green)] font-semibold mt-0.5">Sellada · PDF generado</div>}
                       </div>
-                      <div className="font-medium">{fmtCOP(s.total)}</div>
+                      <div className="font-medium">{fmtCOP(s.net_total ?? s.total)}</div>
                     </div>
                     {isOpen && (
                       <div className="border-t border-[var(--card-border)] px-4 py-3">
@@ -77,6 +90,20 @@ export function SettlementsClient({ initialSettlements }: { initialSettlements: 
                             <div className="font-medium">{fmtCOP(l.total)}</div>
                           </div>
                         ))}
+                        {s.deductions && s.deductions.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-[var(--card-border)]">
+                            {s.deductions.map((d, i) => (
+                              <div key={i} className="flex justify-between py-1 text-[12.5px]">
+                                <div className="text-[var(--muted)]">{d.concept}{d.note ? ` · ${d.note}` : ""}</div>
+                                <div className="font-medium" style={{ color: "var(--red)" }}>- {fmtCOP(d.amount)}</div>
+                              </div>
+                            ))}
+                            <div className="flex justify-between pt-1.5 mt-1 border-t border-[var(--card-border)] text-[13px] font-semibold">
+                              <div>Total neto</div>
+                              <div>{fmtCOP(s.net_total ?? s.total)}</div>
+                            </div>
+                          </div>
+                        )}
                         <button
                           className="w-full mt-3 bg-[var(--navy)] text-white rounded-lg py-2.5 text-sm font-semibold"
                           onClick={(e) => {

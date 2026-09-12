@@ -89,14 +89,43 @@ export async function closeOpenPeriod() {
       bucket.total += Number(r.total);
     }
 
+    // Deducciones (novedades) registradas mientras el período estuvo abierto
+    const deductionsRes = await client.query(
+      `SELECT d.employee_id, e.name AS employee_name, d.concept, d.amount, d.note
+       FROM deductions d
+       JOIN employees e ON e.id = d.employee_id
+       WHERE d.period_id = $1`,
+      [period.id]
+    );
+    type Deduction = { concept: string; amount: number; note: string | null };
+    const deductionsByEmployee = new Map<string, { name: string; items: Deduction[] }>();
+    for (const d of deductionsRes.rows) {
+      if (!deductionsByEmployee.has(d.employee_id)) {
+        deductionsByEmployee.set(d.employee_id, { name: d.employee_name, items: [] });
+      }
+      deductionsByEmployee.get(d.employee_id)!.items.push({
+        concept: d.concept,
+        amount: Number(d.amount),
+        note: d.note,
+      });
+      // asegura que el colaborador tenga liquidación aunque no haya producido nada
+      if (!byEmployee.has(d.employee_id)) {
+        byEmployee.set(d.employee_id, { name: d.employee_name, lines: new Map(), total: 0 });
+      }
+    }
+
     let count = 0;
     for (const [employeeId, bucket] of byEmployee.entries()) {
       const lines = Array.from(bucket.lines.values());
+      const deductions = deductionsByEmployee.get(employeeId)?.items || [];
+      const deductionsTotal = deductions.reduce((s, d) => s + d.amount, 0);
+      const netTotal = bucket.total - deductionsTotal;
+
       await client.query(
-        `INSERT INTO settlements (period_id, employee_id, total, lines, sealed)
-         VALUES ($1,$2,$3,$4,false)
+        `INSERT INTO settlements (period_id, employee_id, total, lines, deductions, net_total, sealed)
+         VALUES ($1,$2,$3,$4,$5,$6,false)
          ON CONFLICT (period_id, employee_id) DO NOTHING`,
-        [period.id, employeeId, bucket.total, JSON.stringify(lines)]
+        [period.id, employeeId, bucket.total, JSON.stringify(lines), JSON.stringify(deductions), netTotal]
       );
       count++;
     }
@@ -115,5 +144,61 @@ export async function closeOpenPeriod() {
     );
 
     return { count, periodId: period.id };
+  });
+}
+
+/**
+ * Reabre un período que se cerró por error: devuelve los registros de
+ * producción a estado 'activo' (no cuentan como pagados) y elimina las
+ * liquidaciones generadas (incluidas las ya selladas/con PDF descargado,
+ * ya que se van a volver a calcular cuando el período se cierre de
+ * verdad). Solo se puede reabrir si no hay ya otro período abierto.
+ */
+export async function reopenPeriod(periodId: string) {
+  const session = await requireAdmin();
+  return withTransaction(async (client) => {
+    const otherOpenRes = await client.query(
+      `SELECT id FROM production_periods WHERE status = 'abierto' AND id != $1`,
+      [periodId]
+    );
+    if ((otherOpenRes.rowCount ?? 0) > 0) {
+      throw new PeriodError(
+        "Ya hay otro período abierto distinto a este. Ciérralo primero antes de reabrir este."
+      );
+    }
+
+    const periodRes = await client.query(
+      `SELECT id, start_date::text AS start_date, end_date::text AS end_date, status
+       FROM production_periods WHERE id = $1 FOR UPDATE`,
+      [periodId]
+    );
+    if (periodRes.rowCount === 0) throw new PeriodError("Período no encontrado.");
+    const period = periodRes.rows[0];
+    if (period.status !== "cerrado") {
+      throw new PeriodError("Este período no está cerrado, no hace falta reabrirlo.");
+    }
+
+    const revertRes = await client.query(
+      `UPDATE production_records SET status = 'activo' WHERE period_id = $1 AND status = 'liquidado' RETURNING id`,
+      [periodId]
+    );
+    const deletedSettlementsRes = await client.query(
+      `DELETE FROM settlements WHERE period_id = $1 RETURNING id`,
+      [periodId]
+    );
+    await client.query(`UPDATE production_periods SET status = 'abierto' WHERE id = $1`, [periodId]);
+
+    await insertAudit(
+      client,
+      "admin",
+      session.name,
+      "Período reabierto",
+      `${period.start_date} a ${period.end_date} · ${revertRes.rowCount} registros devueltos a activo · ${deletedSettlementsRes.rowCount} liquidaciones eliminadas`
+    );
+
+    return {
+      recordsReverted: revertRes.rowCount,
+      settlementsDeleted: deletedSettlementsRes.rowCount,
+    };
   });
 }

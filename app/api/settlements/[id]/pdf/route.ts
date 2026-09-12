@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   const res = await pool.query(
-    `SELECT s.id, s.total, s.lines, s.sealed, s.generated_at, e.name AS employee_name,
+    `SELECT s.id, s.total, s.lines, s.deductions, s.net_total, s.sealed, s.generated_at, e.name AS employee_name,
             pp.start_date::text AS period_start, pp.end_date::text AS period_end
      FROM settlements s
      JOIN employees e ON e.id = s.employee_id
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   const settlement = res.rows[0];
   const lines: { operationName: string; qty: number; rate: number; total: number }[] = settlement.lines;
+  const deductions: { concept: string; amount: number; note: string | null }[] = settlement.deductions || [];
 
   // sellar si es la primera vez (idempotente)
   if (!settlement.sealed) {
@@ -86,9 +87,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   y -= 6;
   page.drawLine({ start: { x: marginX, y }, end: { x: W - marginX, y }, thickness: 0.9, color: ink });
+  y -= 18;
+  page.drawText("Subtotal producción:", { x: marginX, y, size: 10, font, color: ink });
+  page.drawText(fmtCOP(settlement.total), { x: marginX + 250, y, size: 10, font, color: ink });
+  y -= 16;
+
+  if (deductions.length > 0) {
+    if (y < 90) {
+      page = doc.addPage([W, H]);
+      y = H - 40;
+    }
+    for (const d of deductions) {
+      page.drawText(`${d.concept}${d.note ? ` (${d.note})` : ""}`, { x: marginX, y, size: 9.5, font, color: muted });
+      page.drawText(`- ${fmtCOP(d.amount)}`, { x: marginX + 250, y, size: 9.5, font, color: rgb(0.7, 0.27, 0.18) });
+      y -= 15;
+    }
+    y -= 4;
+  }
+
+  y -= 4;
+  page.drawLine({ start: { x: marginX, y }, end: { x: W - marginX, y }, thickness: 0.9, color: ink });
   y -= 22;
   page.drawText("Total a pagar:", { x: marginX, y, size: 12, font: fontBold, color: ink });
-  page.drawText(fmtCOP(settlement.total), { x: marginX + 250, y, size: 12, font: fontBold, color: ink });
+  page.drawText(fmtCOP(settlement.net_total ?? settlement.total), { x: marginX + 250, y, size: 12, font: fontBold, color: ink });
 
   y -= 26;
   page.drawText("Documento generado por el sistema de producción del taller.", { x: marginX, y, size: 7.5, font, color: muted });
