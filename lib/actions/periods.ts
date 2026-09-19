@@ -64,14 +64,17 @@ export async function closeOpenPeriod() {
     await client.query(`UPDATE production_periods SET status = 'cerrado' WHERE id = $1`, [period.id]);
 
     const recordsRes = await client.query(
-      `SELECT pr.employee_id, e.name AS employee_name, pr.operation_name, pr.rate, pr.qty, pr.total
+      `SELECT pr.employee_id, e.name AS employee_name, pr.operation_name, pr.rate, pr.qty, pr.total,
+              g.name AS garment_name
        FROM production_records pr
        JOIN employees e ON e.id = pr.employee_id
+       JOIN production_orders po ON po.id = pr.order_id
+       JOIN garments g ON g.id = po.garment_id
        WHERE pr.period_id = $1 AND pr.status = 'activo'`,
       [period.id]
     );
 
-    type Line = { operationName: string; rate: number; qty: number; total: number };
+    type Line = { operationName: string; garmentName: string; rate: number; qty: number; total: number };
     const byEmployee = new Map<string, { name: string; lines: Map<string, Line>; total: number }>();
 
     for (const r of recordsRes.rows) {
@@ -79,9 +82,9 @@ export async function closeOpenPeriod() {
         byEmployee.set(r.employee_id, { name: r.employee_name, lines: new Map(), total: 0 });
       }
       const bucket = byEmployee.get(r.employee_id)!;
-      const key = `${r.operation_name}__${r.rate}`;
+      const key = `${r.garment_name}__${r.operation_name}__${r.rate}`;
       if (!bucket.lines.has(key)) {
-        bucket.lines.set(key, { operationName: r.operation_name, rate: Number(r.rate), qty: 0, total: 0 });
+        bucket.lines.set(key, { operationName: r.operation_name, garmentName: r.garment_name, rate: Number(r.rate), qty: 0, total: 0 });
       }
       const line = bucket.lines.get(key)!;
       line.qty += r.qty;
@@ -89,43 +92,19 @@ export async function closeOpenPeriod() {
       bucket.total += Number(r.total);
     }
 
-    // Deducciones (novedades) registradas mientras el período estuvo abierto
-    const deductionsRes = await client.query(
-      `SELECT d.employee_id, e.name AS employee_name, d.concept, d.amount, d.note
-       FROM deductions d
-       JOIN employees e ON e.id = d.employee_id
-       WHERE d.period_id = $1`,
-      [period.id]
-    );
-    type Deduction = { concept: string; amount: number; note: string | null };
-    const deductionsByEmployee = new Map<string, { name: string; items: Deduction[] }>();
-    for (const d of deductionsRes.rows) {
-      if (!deductionsByEmployee.has(d.employee_id)) {
-        deductionsByEmployee.set(d.employee_id, { name: d.employee_name, items: [] });
-      }
-      deductionsByEmployee.get(d.employee_id)!.items.push({
-        concept: d.concept,
-        amount: Number(d.amount),
-        note: d.note,
-      });
-      // asegura que el colaborador tenga liquidación aunque no haya producido nada
-      if (!byEmployee.has(d.employee_id)) {
-        byEmployee.set(d.employee_id, { name: d.employee_name, lines: new Map(), total: 0 });
-      }
-    }
+    // Deducciones (novedades): ya NO se aplican aquí — ahora se agregan
+    // directamente sobre la liquidación ya generada, desde la pestaña
+    // Liquidaciones (ver lib/actions/deductions.ts -> addNovedad).
 
     let count = 0;
     for (const [employeeId, bucket] of byEmployee.entries()) {
       const lines = Array.from(bucket.lines.values());
-      const deductions = deductionsByEmployee.get(employeeId)?.items || [];
-      const deductionsTotal = deductions.reduce((s, d) => s + d.amount, 0);
-      const netTotal = bucket.total - deductionsTotal;
 
       await client.query(
         `INSERT INTO settlements (period_id, employee_id, total, lines, deductions, net_total, sealed)
-         VALUES ($1,$2,$3,$4,$5,$6,false)
+         VALUES ($1,$2,$3,$4,'[]'::jsonb,$3,false)
          ON CONFLICT (period_id, employee_id) DO NOTHING`,
-        [period.id, employeeId, bucket.total, JSON.stringify(lines), JSON.stringify(deductions), netTotal]
+        [period.id, employeeId, bucket.total, JSON.stringify(lines)]
       );
       count++;
     }

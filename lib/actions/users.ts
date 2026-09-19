@@ -84,3 +84,83 @@ export async function deleteViewerUser(userId: string) {
     await insertAudit(client, "admin", session.name, "Usuario de consulta eliminado", res.rows[0].username);
   });
 }
+
+export async function getPackagerUsers() {
+  await requireAdmin();
+  const res = await pool.query(
+    `SELECT id, username, active, created_at FROM users WHERE role = 'empaque' ORDER BY username`
+  );
+  return res.rows;
+}
+
+export async function createPackagerUser(username: string, password: string) {
+  const session = await requireAdmin();
+  const cleanUsername = username.trim();
+  const cleanPassword = password.trim();
+  if (!cleanUsername) throw new AppError("Escribe un nombre de usuario.");
+  if (!cleanPassword || cleanPassword.length < 4) {
+    throw new AppError("La contraseña debe tener al menos 4 caracteres.");
+  }
+
+  return withTransaction(async (client) => {
+    const dup = await client.query(`SELECT id FROM users WHERE username = $1`, [cleanUsername]);
+    if ((dup.rowCount ?? 0) > 0) throw new AppError("Ya existe un usuario con ese nombre.");
+
+    const passwordHash = await hashSecret(cleanPassword);
+    const res = await client.query(
+      `INSERT INTO users (username, password_hash, role, active) VALUES ($1,$2,'empaque',true) RETURNING id`,
+      [cleanUsername, passwordHash]
+    );
+    await insertAudit(client, "admin", session.name, "Usuario de empaque creado", cleanUsername);
+    return { id: res.rows[0].id, username: cleanUsername };
+  });
+}
+
+export async function togglePackagerActive(userId: string) {
+  const session = await requireAdmin();
+  return withTransaction(async (client) => {
+    const res = await client.query(
+      `UPDATE users SET active = NOT active WHERE id = $1 AND role = 'empaque' RETURNING username, active`,
+      [userId]
+    );
+    if (res.rowCount === 0) throw new AppError("Usuario no encontrado.");
+    await insertAudit(
+      client,
+      "admin",
+      session.name,
+      "Cambio de estado de usuario de empaque",
+      `${res.rows[0].username}: ${res.rows[0].active ? "activo" : "inactivo"}`
+    );
+    return res.rows[0];
+  });
+}
+
+export async function resetPackagerPassword(userId: string, newPassword: string) {
+  const session = await requireAdmin();
+  const cleanPassword = newPassword.trim();
+  if (!cleanPassword || cleanPassword.length < 4) {
+    throw new AppError("La contraseña debe tener al menos 4 caracteres.");
+  }
+  const passwordHash = await hashSecret(cleanPassword);
+
+  return withTransaction(async (client) => {
+    const res = await client.query(
+      `UPDATE users SET password_hash = $1 WHERE id = $2 AND role = 'empaque' RETURNING username`,
+      [passwordHash, userId]
+    );
+    if (res.rowCount === 0) throw new AppError("Usuario no encontrado.");
+    await insertAudit(client, "admin", session.name, "Contraseña de usuario de empaque actualizada", res.rows[0].username);
+  });
+}
+
+export async function deletePackagerUser(userId: string) {
+  const session = await requireAdmin();
+  return withTransaction(async (client) => {
+    const res = await client.query(
+      `DELETE FROM users WHERE id = $1 AND role = 'empaque' RETURNING username`,
+      [userId]
+    );
+    if (res.rowCount === 0) throw new AppError("Usuario no encontrado.");
+    await insertAudit(client, "admin", session.name, "Usuario de empaque eliminado", res.rows[0].username);
+  });
+}

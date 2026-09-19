@@ -2,14 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { loginAdmin, loginEmployee, loginViewer } from "@/lib/actions/auth";
+import { loginAdmin, loginEmployee, loginViewer, loginPackager } from "@/lib/actions/auth";
 
 export function LoginForm({
   employees,
   viewers,
+  packagers,
 }: {
   employees: { id: string; name: string }[];
   viewers: { id: string; username: string }[];
+  packagers: { id: string; username: string }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -26,6 +28,10 @@ export function LoginForm({
   const [viewerUsername, setViewerUsername] = useState("");
   const [viewerPassword, setViewerPassword] = useState("");
   const [viewerError, setViewerError] = useState("");
+
+  const [packagerUsername, setPackagerUsername] = useState("");
+  const [packagerPassword, setPackagerPassword] = useState("");
+  const [packagerError, setPackagerError] = useState("");
 
   function submitEmployee() {
     setEmpError("");
@@ -62,6 +68,19 @@ export function LoginForm({
         router.refresh();
       } catch (err: any) {
         setViewerError(err.message || "No se pudo iniciar sesión.");
+      }
+    });
+  }
+
+  function submitPackager() {
+    setPackagerError("");
+    startTransition(async () => {
+      try {
+        await loginPackager(packagerUsername, packagerPassword);
+        router.push("/empaque");
+        router.refresh();
+      } catch (err: any) {
+        setPackagerError(err.message || "No se pudo iniciar sesión.");
       }
     });
   }
@@ -195,6 +214,44 @@ export function LoginForm({
             onClick={submitViewer}
           >
             Entrar a consultar órdenes e inventario
+          </button>
+        </div>
+
+        <div className="app-card p-4 mb-3.5">
+          <div className="text-[13px] font-semibold text-[var(--navy)] mb-2.5">Soy líder de empaque</div>
+          <select
+            className="w-full h-10 rounded-lg border border-[var(--card-border)] px-2.5 text-sm"
+            value={packagerUsername}
+            onChange={(e) => {
+              setPackagerUsername(e.target.value);
+              setPackagerPassword("");
+              setPackagerError("");
+            }}
+          >
+            <option value="">Selecciona tu nombre</option>
+            {packagers.map((p) => (
+              <option key={p.id} value={p.username}>
+                {p.username}
+              </option>
+            ))}
+          </select>
+          {packagerUsername && (
+            <input
+              type="password"
+              className="w-full h-10 rounded-lg border border-[var(--card-border)] px-2.5 text-sm mt-2.5"
+              placeholder="Contraseña"
+              value={packagerPassword}
+              onChange={(e) => setPackagerPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitPackager()}
+            />
+          )}
+          {packagerError && <div className="text-xs text-[var(--red)] mt-1.5">{packagerError}</div>}
+          <button
+            className="w-full mt-3 bg-[var(--navy)] text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
+            disabled={!packagerUsername || !packagerPassword || isPending}
+            onClick={submitPackager}
+          >
+            Entrar a registrar empaque
           </button>
         </div>
 

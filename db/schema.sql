@@ -133,22 +133,32 @@ CREATE TABLE IF NOT EXISTS settlements (
   lines JSONB NOT NULL,
   deductions JSONB NOT NULL DEFAULT '[]'::jsonb,
   net_total NUMERIC(14,2) NOT NULL DEFAULT 0,
+  is_manual BOOLEAN NOT NULL DEFAULT false,
   sealed BOOLEAN NOT NULL DEFAULT false,
   sealed_at TIMESTAMPTZ,
   generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(period_id, employee_id)
 );
 
--- ---------- Deducciones (novedades) aplicadas antes de cerrar un período ----------
+-- ---------- Novedades (deducciones o pagos adicionales) aplicadas sobre una liquidación ----------
 CREATE TABLE IF NOT EXISTS deductions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   period_id UUID NOT NULL REFERENCES production_periods(id),
   employee_id UUID NOT NULL REFERENCES employees(id),
-  concept TEXT NOT NULL CHECK (concept IN ('Deducción por daños','Deducción por préstamo')),
+  concept TEXT NOT NULL CHECK (concept IN ('Deducción por daños','Deducción por préstamo','Pago por prestación de servicios')),
   amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
   note TEXT,
   created_by TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------- Empaque: registros de prendas empacadas por referencia/orden ----------
+CREATE TABLE IF NOT EXISTS packaging_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id UUID NOT NULL REFERENCES production_orders(id),
+  qty INT NOT NULL CHECK (qty > 0),
+  registered_by TEXT,
+  registered_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- ---------- Auditoría ----------

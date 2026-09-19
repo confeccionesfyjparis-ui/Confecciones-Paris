@@ -3,7 +3,7 @@ import { pool } from "./db";
 
 export async function insertAudit(
   clientOrPool: PoolClient | typeof pool,
-  actorType: "admin" | "employee" | "viewer" | "system",
+  actorType: "admin" | "employee" | "viewer" | "empaque" | "system",
   actorName: string | null,
   action: string,
   detail?: string

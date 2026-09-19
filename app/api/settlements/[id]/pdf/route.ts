@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   const res = await pool.query(
-    `SELECT s.id, s.total, s.lines, s.deductions, s.net_total, s.sealed, s.generated_at, e.name AS employee_name,
+    `SELECT s.id, s.total, s.lines, s.deductions, s.net_total, s.is_manual, s.sealed, s.generated_at, e.name AS employee_name,
             pp.start_date::text AS period_start, pp.end_date::text AS period_end
      FROM settlements s
      JOIN employees e ON e.id = s.employee_id
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Liquidación no encontrada." }, { status: 404 });
   }
   const settlement = res.rows[0];
-  const lines: { operationName: string; qty: number; rate: number; total: number }[] = settlement.lines;
+  const lines: { operationName: string; garmentName?: string; qty: number; rate: number; total: number }[] = settlement.lines;
   const deductions: { concept: string; amount: number; note: string | null }[] = settlement.deductions || [];
 
   // sellar si es la primera vez (idempotente)
@@ -78,7 +78,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       page = doc.addPage([W, H]);
       y = H - 40;
     }
-    page.drawText(truncate(line.operationName, 34), { x: marginX, y, size: 9, font, color: ink });
+    const label = line.garmentName ? `${line.operationName} (${line.garmentName})` : line.operationName;
+    page.drawText(truncate(label, 40), { x: marginX, y, size: 9, font, color: ink });
     page.drawText(String(line.qty), { x: marginX + 210, y, size: 9, font, color: ink });
     page.drawText(fmtCOP(line.rate), { x: marginX + 250, y, size: 9, font, color: ink });
     page.drawText(fmtCOP(line.total), { x: marginX + 305, y, size: 9, font, color: ink });
@@ -88,7 +89,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   y -= 6;
   page.drawLine({ start: { x: marginX, y }, end: { x: W - marginX, y }, thickness: 0.9, color: ink });
   y -= 18;
-  page.drawText("Subtotal producción:", { x: marginX, y, size: 10, font, color: ink });
+  page.drawText(settlement.is_manual ? "Subtotal:" : "Subtotal producción:", { x: marginX, y, size: 10, font, color: ink });
   page.drawText(fmtCOP(settlement.total), { x: marginX + 250, y, size: 10, font, color: ink });
   y -= 16;
 

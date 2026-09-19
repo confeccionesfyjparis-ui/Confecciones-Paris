@@ -40,6 +40,23 @@ export async function loginViewer(username: string, password: string) {
   await insertAudit(pool, "viewer", user.username, "Inicio de sesión");
 }
 
+export async function loginPackager(username: string, password: string) {
+  const res = await pool.query(
+    `SELECT id, username, password_hash, active FROM users WHERE username = $1 AND role = 'empaque'`,
+    [username]
+  );
+  if (res.rowCount === 0 || !res.rows[0].active) {
+    throw new AuthError("Usuario o contraseña incorrectos.");
+  }
+  const user = res.rows[0];
+  const ok = await verifySecret(password, user.password_hash);
+  if (!ok) {
+    throw new AuthError("Usuario o contraseña incorrectos.");
+  }
+  await createSession({ sub: user.id, role: "empaque", name: user.username });
+  await insertAudit(pool, "empaque", user.username, "Inicio de sesión");
+}
+
 export async function loginEmployee(employeeId: string, pin: string) {
   const res = await pool.query(
     `SELECT id, name, pin_hash, active FROM employees WHERE id = $1`,
@@ -71,6 +88,13 @@ export async function listActiveEmployeesForLogin() {
 export async function listActiveViewersForLogin() {
   const res = await pool.query(
     `SELECT id, username FROM users WHERE active = true AND role = 'viewer' ORDER BY username`
+  );
+  return res.rows;
+}
+
+export async function listActivePackagersForLogin() {
+  const res = await pool.query(
+    `SELECT id, username FROM users WHERE active = true AND role = 'empaque' ORDER BY username`
   );
   return res.rows;
 }
