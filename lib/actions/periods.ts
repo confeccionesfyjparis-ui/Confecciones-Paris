@@ -65,7 +65,7 @@ export async function closeOpenPeriod() {
 
     const recordsRes = await client.query(
       `SELECT pr.employee_id, e.name AS employee_name, pr.operation_name, pr.rate, pr.qty, pr.total,
-              g.name AS garment_name
+              g.name AS garment_name, po.number AS order_number
        FROM production_records pr
        JOIN employees e ON e.id = pr.employee_id
        JOIN production_orders po ON po.id = pr.order_id
@@ -74,7 +74,7 @@ export async function closeOpenPeriod() {
       [period.id]
     );
 
-    type Line = { operationName: string; garmentName: string; rate: number; qty: number; total: number };
+    type Line = { operationName: string; garmentName: string; orderNumber: string; rate: number; qty: number; total: number };
     const byEmployee = new Map<string, { name: string; lines: Map<string, Line>; total: number }>();
 
     for (const r of recordsRes.rows) {
@@ -82,9 +82,16 @@ export async function closeOpenPeriod() {
         byEmployee.set(r.employee_id, { name: r.employee_name, lines: new Map(), total: 0 });
       }
       const bucket = byEmployee.get(r.employee_id)!;
-      const key = `${r.garment_name}__${r.operation_name}__${r.rate}`;
+      const key = `${r.order_number}__${r.garment_name}__${r.operation_name}__${r.rate}`;
       if (!bucket.lines.has(key)) {
-        bucket.lines.set(key, { operationName: r.operation_name, garmentName: r.garment_name, rate: Number(r.rate), qty: 0, total: 0 });
+        bucket.lines.set(key, {
+          operationName: r.operation_name,
+          garmentName: r.garment_name,
+          orderNumber: r.order_number,
+          rate: Number(r.rate),
+          qty: 0,
+          total: 0,
+        });
       }
       const line = bucket.lines.get(key)!;
       line.qty += r.qty;

@@ -14,7 +14,7 @@ function fmtDateHuman(iso: string) {
   return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-type Line = { operationName: string; garmentName?: string; qty: number; rate: number; total: number };
+type Line = { operationName: string; garmentName?: string; orderNumber?: string; qty: number; rate: number; total: number };
 type DeductionLine = { concept: string; amount: number; note: string | null };
 type Settlement = {
   id: string;
@@ -243,7 +243,11 @@ export function SettlementsClient({
                           <div key={`${l.operationName}-${i}`} className="grid grid-cols-[1.6fr_1fr_auto] gap-2.5 py-1.5 text-[12.5px]">
                             <div>
                               {l.operationName}
-                              {l.garmentName && <div className="text-[11px] text-[var(--muted)]">{l.garmentName}</div>}
+                              {(l.garmentName || l.orderNumber) && (
+                                <div className="text-[11px] text-[var(--muted)]">
+                                  {l.orderNumber ? `${l.orderNumber} · ` : ""}{l.garmentName}
+                                </div>
+                              )}
                             </div>
                             <div className="text-[var(--muted)]">{l.qty} u × {fmtCOP(l.rate)}</div>
                             <div className="font-medium">{fmtCOP(l.total)}</div>

@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Liquidación no encontrada." }, { status: 404 });
   }
   const settlement = res.rows[0];
-  const lines: { operationName: string; garmentName?: string; qty: number; rate: number; total: number }[] = settlement.lines;
+  const lines: { operationName: string; garmentName?: string; orderNumber?: string; qty: number; rate: number; total: number }[] = settlement.lines;
   const deductions: { concept: string; amount: number; note: string | null }[] = settlement.deductions || [];
 
   // sellar si es la primera vez (idempotente)
@@ -78,7 +78,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       page = doc.addPage([W, H]);
       y = H - 40;
     }
-    const label = line.garmentName ? `${line.operationName} (${line.garmentName})` : line.operationName;
+    const ref = [line.orderNumber, line.garmentName].filter(Boolean).join(" · ");
+    const label = ref ? `${line.operationName} (${ref})` : line.operationName;
     page.drawText(truncate(label, 40), { x: marginX, y, size: 9, font, color: ink });
     page.drawText(String(line.qty), { x: marginX + 210, y, size: 9, font, color: ink });
     page.drawText(fmtCOP(line.rate), { x: marginX + 250, y, size: 9, font, color: ink });
