@@ -38,7 +38,65 @@ async function recomputeSettlement(client: any, periodId: string, employeeId: st
   ]);
 }
 
-/** Agrega una novedad (deducción o pago adicional) directamente sobre una liquidación ya generada. */
+/** Agrega una novedad ANTES de que el período se cierre — se guarda contra el
+ * colaborador y el período abierto, y se aplica automáticamente a su
+ * liquidación cuando el período se cierre. */
+export async function addNovedadOpenPeriod(params: {
+  employeeId: string;
+  concept: string;
+  amount: number;
+  note?: string;
+}) {
+  const session = await requireAdmin();
+  const amount = Number(params.amount);
+  if (!NOVEDAD_CONCEPTS.some((c) => c.label === params.concept)) {
+    throw new AppError("Concepto de novedad inválido.");
+  }
+  if (!amount || amount <= 0) {
+    throw new AppError("El monto debe ser mayor a cero.");
+  }
+
+  return withTransaction(async (client) => {
+    const periodRes = await client.query(
+      `SELECT id FROM production_periods WHERE status = 'abierto' LIMIT 1`
+    );
+    if (periodRes.rowCount === 0) {
+      throw new AppError("No hay un período abierto para registrar la novedad.");
+    }
+    const empRes = await client.query(`SELECT name FROM employees WHERE id = $1`, [params.employeeId]);
+    if (empRes.rowCount === 0) throw new AppError("Colaborador no encontrado.");
+
+    await client.query(
+      `INSERT INTO deductions (period_id, employee_id, concept, amount, note, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [periodRes.rows[0].id, params.employeeId, params.concept, amount, params.note || null, session.name]
+    );
+
+    await insertAudit(
+      client,
+      "admin",
+      session.name,
+      "Novedad registrada (corte en curso)",
+      `${empRes.rows[0].name}: ${params.concept} por ${amount}`
+    );
+  });
+}
+
+/** Lista las novedades registradas para el período que está abierto ahora mismo. */
+export async function getOpenPeriodNovedades() {
+  await requireAdmin();
+  const res = await pool.query(
+    `SELECT d.id, d.employee_id, e.name AS employee_name, d.concept, d.amount, d.note, d.created_at
+     FROM deductions d
+     JOIN employees e ON e.id = d.employee_id
+     JOIN production_periods pp ON pp.id = d.period_id
+     WHERE pp.status = 'abierto'
+     ORDER BY d.created_at DESC`
+  );
+  return res.rows;
+}
+
+/** Agrega una novedad directamente sobre una liquidación ya generada. */
 export async function addNovedad(params: {
   settlementId: string;
   concept: string;

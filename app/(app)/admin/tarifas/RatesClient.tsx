@@ -6,6 +6,7 @@ import {
   createGarment,
   addOperationToGarment,
   updateOperationRate,
+  updateOperationName,
   updateGarmentSalePrice,
   deleteOperationFromGarment,
 } from "@/lib/actions/garments";
@@ -32,6 +33,7 @@ export function RatesClient({ initialGarments }: { initialGarments: Garment[] })
   const [newOpDraft, setNewOpDraft] = useState({ name: "", rate: "" });
 
   const [editingRate, setEditingRate] = useState<{ opId: string; value: string } | null>(null);
+  const [editingName, setEditingName] = useState<{ opId: string; value: string } | null>(null);
   const [editingPrice, setEditingPrice] = useState<{ garmentId: string; value: string } | null>(null);
 
   function notify(msg: string, kind: "ok" | "error" = "ok") {
@@ -83,6 +85,20 @@ export function RatesClient({ initialGarments }: { initialGarments: Garment[] })
         router.refresh();
       } catch (err: any) {
         notify(err.message || "No se pudo actualizar la tarifa.", "error");
+      }
+    });
+  }
+
+  function saveName() {
+    if (!editingName) return;
+    startTransition(async () => {
+      try {
+        await updateOperationName(editingName.opId, editingName.value);
+        notify("Nombre de la operación corregido.");
+        setEditingName(null);
+        router.refresh();
+      } catch (err: any) {
+        notify(err.message || "No se pudo corregir el nombre.", "error");
       }
     });
   }
@@ -186,21 +202,36 @@ export function RatesClient({ initialGarments }: { initialGarments: Garment[] })
               </div>
 
               {g.operations.map((op) => (
-                <div key={op.id} className="flex justify-between items-center py-2 border-t border-[#F0EEE6]">
-                  <div className="text-[13px]">{op.name}</div>
-                  {editingRate?.opId === op.id ? (
-                    <div className="flex items-center gap-1.5">
-                      <input type="number" className="in" style={{ width: 100 }} value={editingRate.value} onChange={(e) => setEditingRate({ ...editingRate, value: e.target.value })} autoFocus />
-                      <button className="primary-btn-sm" onClick={saveRate}>Guardar</button>
-                      <button className="ghost-btn" onClick={() => setEditingRate(null)}>Cancelar</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[13.5px] font-semibold">{fmtCOP(op.rate)}</span>
-                      <button className="ghost-btn" onClick={() => setEditingRate({ opId: op.id, value: String(op.rate) })}>Editar</button>
-                      <button className="ghost-btn" style={{ color: "var(--red)", borderColor: "#E3BBAB" }} onClick={() => removeOperation(op.id, op.name)}>Eliminar</button>
-                    </div>
-                  )}
+                <div key={op.id} className="flex flex-col py-2 border-t border-[#F0EEE6]">
+                  <div className="flex justify-between items-center">
+                    {editingName?.opId === op.id ? (
+                      <div className="flex items-center gap-1.5 flex-1">
+                        <input className="in" style={{ flex: 1 }} value={editingName.value} onChange={(e) => setEditingName({ ...editingName, value: e.target.value })} autoFocus />
+                        <button className="primary-btn-sm" onClick={saveName}>Guardar</button>
+                        <button className="ghost-btn" onClick={() => setEditingName(null)}>Cancelar</button>
+                      </div>
+                    ) : (
+                      <div className="text-[13px] flex items-center gap-2">
+                        {op.name}
+                        <button className="text-[11px] underline" style={{ color: "var(--muted)" }} onClick={() => setEditingName({ opId: op.id, value: op.name })}>
+                          corregir nombre
+                        </button>
+                      </div>
+                    )}
+                    {editingRate?.opId === op.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <input type="number" className="in" style={{ width: 100 }} value={editingRate.value} onChange={(e) => setEditingRate({ ...editingRate, value: e.target.value })} autoFocus />
+                        <button className="primary-btn-sm" onClick={saveRate}>Guardar</button>
+                        <button className="ghost-btn" onClick={() => setEditingRate(null)}>Cancelar</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[13.5px] font-semibold">{fmtCOP(op.rate)}</span>
+                        <button className="ghost-btn" onClick={() => setEditingRate({ opId: op.id, value: String(op.rate) })}>Editar</button>
+                        <button className="ghost-btn" style={{ color: "var(--red)", borderColor: "#E3BBAB" }} onClick={() => removeOperation(op.id, op.name)}>Eliminar</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
 

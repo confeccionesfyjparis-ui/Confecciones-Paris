@@ -5,6 +5,7 @@ import { pool, withTransaction } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { insertAudit } from "@/lib/audit";
 import { nextAvailablePeriodRange } from "@/lib/dates";
+import { novedadSign } from "@/lib/constants";
 
 
 export async function getPeriods() {
@@ -103,15 +104,41 @@ export async function closeOpenPeriod() {
     // directamente sobre la liquidación ya generada, desde la pestaña
     // Liquidaciones (ver lib/actions/deductions.ts -> addNovedad).
 
+    // Novedades registradas mientras el período estaba abierto (ver
+    // lib/actions/deductions.ts -> addNovedadOpenPeriod), a aplicar ahora.
+    const openNovedadesRes = await client.query(
+      `SELECT id, employee_id, concept, amount, note FROM deductions WHERE period_id = $1`,
+      [period.id]
+    );
+    type Novedad = { id: string; concept: string; amount: number; note: string | null };
+    const novedadesByEmployee = new Map<string, Novedad[]>();
+    for (const d of openNovedadesRes.rows) {
+      if (!novedadesByEmployee.has(d.employee_id)) novedadesByEmployee.set(d.employee_id, []);
+      novedadesByEmployee.get(d.employee_id)!.push({
+        id: d.id,
+        concept: d.concept,
+        amount: Number(d.amount),
+        note: d.note,
+      });
+      // asegura que el colaborador tenga liquidación aunque no haya producido nada
+      if (!byEmployee.has(d.employee_id)) {
+        const empRes = await client.query(`SELECT name FROM employees WHERE id = $1`, [d.employee_id]);
+        byEmployee.set(d.employee_id, { name: empRes.rows[0]?.name || "", lines: new Map(), total: 0 });
+      }
+    }
+
     let count = 0;
     for (const [employeeId, bucket] of byEmployee.entries()) {
       const lines = Array.from(bucket.lines.values());
+      const novedades = novedadesByEmployee.get(employeeId) || [];
+      const delta = novedades.reduce((s, n) => s + n.amount * novedadSign(n.concept), 0);
+      const netTotal = bucket.total + delta;
 
       await client.query(
         `INSERT INTO settlements (period_id, employee_id, total, lines, deductions, net_total, sealed)
-         VALUES ($1,$2,$3,$4,'[]'::jsonb,$3,false)
+         VALUES ($1,$2,$3,$4,$5,$6,false)
          ON CONFLICT (period_id, employee_id) DO NOTHING`,
-        [period.id, employeeId, bucket.total, JSON.stringify(lines)]
+        [period.id, employeeId, bucket.total, JSON.stringify(lines), JSON.stringify(novedades), netTotal]
       );
       count++;
     }

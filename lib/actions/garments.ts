@@ -165,6 +165,44 @@ export async function updateOperationRate(operationId: string, newRate: number) 
   });
 }
 
+/**
+ * Corrige el nombre de una operación (por ejemplo si quedó mal escrita).
+ * Las órdenes que ya existen conservan el nombre con el que se crearon
+ * (snapshot en order_operations), así que esto no cambia la trazabilidad
+ * de órdenes anteriores — solo aplica a órdenes nuevas de aquí en adelante.
+ */
+export async function updateOperationName(operationId: string, newName: string) {
+  const session = await requireAdmin();
+  const cleanName = newName.trim();
+  if (!cleanName) throw new GarmentError("Escribe el nombre de la operación.");
+
+  return withTransaction(async (client) => {
+    const res = await client.query(
+      `SELECT name, garment_id FROM operations WHERE id = $1 FOR UPDATE`,
+      [operationId]
+    );
+    if (res.rowCount === 0) throw new GarmentError("Operación no encontrada.");
+    const oldName = res.rows[0].name;
+
+    const dup = await client.query(
+      `SELECT id FROM operations WHERE garment_id = $1 AND lower(name) = lower($2) AND id != $3`,
+      [res.rows[0].garment_id, cleanName, operationId]
+    );
+    if ((dup.rowCount ?? 0) > 0) {
+      throw new GarmentError("Ya existe otra operación con ese nombre en esta prenda.");
+    }
+
+    await client.query(`UPDATE operations SET name = $1 WHERE id = $2`, [cleanName, operationId]);
+    await insertAudit(
+      client,
+      "admin",
+      session.name,
+      "Nombre de operación corregido",
+      `${oldName} -> ${cleanName}`
+    );
+  });
+}
+
 export async function updateGarmentSalePrice(garmentId: string, newPrice: number) {
   const session = await requireAdmin();
   const price = Number(newPrice);
